@@ -86,7 +86,5 @@ Note: These steps are only required for MSSQL. If you are using SQLite3 skip to 
             In [12]: #insert: conn.write_table(data_to_write, table_name, if _exists='append', create=False)
             In [13]: #another_insert: conn.insert(table_name, data_to_write)
             In [14]: #drop_table: conn.drop_table(table_name)
-            
-That is the gist of the module. There is more documenation in the source code. Hopefully you find this code useful.
         
 Contact: Greg Romrell (grromrell@gmail.com) or Ryan Brunt (rjhbrunt on github)
