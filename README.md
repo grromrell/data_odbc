@@ -33,11 +33,11 @@ Note: These steps are only required for MSSQL. If you are using SQLite3 skip to 
                     
                   $ sudo ln -s /usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so /usr/local/lib/libtdsodbc.so
 
-        This command will store a DSN in your odbc.ini files that save the connection to the database you
-        specified. The first thing you input (in this example 'dsn_name' will be the name you use to call 
-        the database later, so make it easy to remember and sufficiently unique. You have now created your
-        first connection! It is now possible to query databases. In case you forget what DSNs or Databases 
-        you are connected to you can see them both through simple commands:
+        This command will store a DSN in your odbc.ini files that save the connection to the database 
+        you specified. The first thing you input (in this example 'dsn_name' will be the name you use 
+        to call the database later, so make it easy to remember and sufficiently unique. You have now 
+        created your first connection! It is now possible to query databases. In case you forget what 
+        DSNs or Databases you are connected to you can see them both through simple commands:
 
             In [4]: do.get_dsn_list()
             Out[4]: ['dsn_name']
@@ -54,8 +54,8 @@ Note: These steps are only required for MSSQL. If you are using SQLite3 skip to 
 
     2. Selecting Data:
 
-        All of the functions of this modul are preceded by calling the 'Sql' class. There are two ways to 
-        select data from your database. The first is by using the select_table() method:
+        All of the functions of this modul are preceded by calling the 'Sql' class. There are two ways
+        to select data from your database. The first is by using the select_table() method:
 
             In [6]: conn = do.Sql(dsn = 'dsn_name')
             In [7]: data = conn.select_table(table_name='table_name', output='df', index_name='id_col')
