@@ -1,11 +1,9 @@
----------
 data_odbc
 ---------
 
 This module makes it easier to read and write data to databases (primarily MS SQL Server and SQLite3 at the moment) 
 from Python using the Pandas Data Analysis Toolkit.
 
---------
 Tutorial
 --------
 
