@@ -9,7 +9,7 @@ from Python using the Pandas Data Analysis Toolkit.
 Tutorial
 --------
 
-Note: These steps are only required or MSSQL. If you are using SQLite3 skip to step TODO
+Note: These steps are only required for MSSQL. If you are using SQLite3 skip to Step 2.
 
     1. Setting up your connections:
 
@@ -21,8 +21,7 @@ Note: These steps are only required or MSSQL. If you are using SQLite3 skip to s
             In [2]: do.create_odbc_ini()
 
         This will create a (hidden) file in your home directory that can store all of your connections called odbc.ini. 
-        Once your odbc.ini file is created you can then create individual SQL server connections called Data Source Names
-        (DSNs). The process to do so is simple:
+        Once your odbc.ini file is created you can then create individual connections called Data Source Names(DSNs).           The process to do so is simple:
 
             In [3]: do.add_dsn('dsn_name', 'server_location', 'database_name')
             
@@ -53,23 +52,43 @@ Note: These steps are only required or MSSQL. If you are using SQLite3 skip to s
             See here for PC: http://blog.mclaughlinsoftware.com/2012/09/12/sql-server-odbc-osn/
             See here for OSX: http://www.actualtech.com/readme.php
 
-TODO: These steps are outdated (rely on pydobc directly), need to updated package and README with SQLAlchemy 
-      functionality.
+    2. Selecting Data:
 
-    2. Querying the database:
+        The first thing you need to do is start a connection by calling the 'Sql' class. All of the commands are held
+        under this class. There are two ways to select data from your database. The first is by using the select_table()
+        method:
 
-        From this point forward the queries should work no matter what type of OS you are running as long as you have set
-        up your DSNs correctly. The first thing you need to do is start a connection by calling the 'Sql' class. 
-        Following that all the commands are available. Querying is the main function of this module. To make a query 
-        call the 'query' function:
-
-            In [6]: my_conn = do.Sql(dsn = 'dsn_name')
-            In [7]: my_data = my_conn.query('Select * From table_name')
+            In [6]: conn = do.Sql(dsn = 'dsn_name')
+            In [7]: data = conn.select_table(table_name='table_name', output='df', index_name='id_col')
             
-        TODO: executing arbitrary queries and normal query structure
-
-    3. Making changes to the database:
+        This will return a pandas dataframe selecting all of the columns from table 'table_name' and adding the primary
+        key as the index. The other way to select data is to user the query() method:
         
-        TODO: Insert into tables and create tables
+            In [8]: query = """Select Column1,
+                                      Column2,
+                                      Column3
+                                      From table_name
+                                      Where Column1 >= 1 and Column2 is not null"""
+                                      
+            In [9]: data = conn.query(query=query, select=True)
+            
+        The query method can also be used to execute any arbitrary SQL queries while staying back-end agnostic thanks to
+        SQL Alchemy's text() method. If you have trouble using this command read about the text method in the tutorial:
+        http://bit.ly/1iyDGY2
+            
+    3. Making changes to a database:
+        
+        There are three supported methods of changing the contents of a database in data_odbc: creating a table, dropping
+        a table and inserting into a table. An example of each is found below. If you want to execute a query that cannot
+        be resolved with the built-in methods use the query() method.
+        
+            In [10]: #create_table: conn.write_table(data_to_write, table_name, if_exists='append', create=True)
+            In [11]: #create_and_write_table: conn.write_table(data_to_write, table_name, if _exists='fail', 
+                                                               create=False)
+            In [12]: #insert: conn.write_table(data_to_write, table_name, if _exists='append', create=False)
+            In [13]: #another_insert: conn.insert(table_name, data_to_write)
+            In [14]: #drop_table: conn.drop_table(table_name)
+            
+That is the gist of the module. There is more documenation in the source code. Hopefully you find this code useful.
         
 Contact: Greg Romrell (grromrell@gmail.com) or Ryan Brunt (rjhbrunt on github)
