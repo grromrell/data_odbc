@@ -1,14 +1,11 @@
-import pyodbc
 import os
-import pandas as pd
-import pandas.io.sql as psql
-from datetime import datetime, date
+import datetime
 import numpy as np
+import pandas as pd
 import sqlalchemy
-from sqlalchemy import MetaData, Table, Column, create_engine
+from sqlalchemy import MetaData, Table, Column, create_engine, text
 from sqlalchemy.sql import select
 from sqlalchemy.types import Integer, Float, BigInteger, Boolean, String, Date, DateTime, Text
-import datetime
 
 class Sql:
 
@@ -19,21 +16,20 @@ class Sql:
         Parameters
         ----------
         dsn : string
-            specifies which database to connect to, comes from user's odbc.ini file
+            specifies which database to connect to. For mssql connections the
+            dsn is the name specified in the user's odbc.ini file. For sqlite
+            the dsn is the absolute location of the .db file 
+            (i.e.: /home/user.myd.db)
 
         db : ['mssql', 'sqlite'], default = 'mssql'
-            specifies the RDBMS you want to use. If you are unsure, then you don't
-            need to use this. When using sqlite, remember that the dsn is the
-            absolute location of your .db file (i.e.: /home/user/mydb.db).
-
-        Methods
-        -------
-        See the functions below
+            specifies the RDBMS to be used
         """
         if db == 'mssql':
             engine_url = 'mssql+pyodbc://%s' % dsn 
-        else:
+        elif db == 'sqlite':
             engine_url = 'sqlite:///%s' % dsn
+        else:
+            raise ValueError("%s is not a valid dsn") % db
 
         engine = create_engine(engine_url)
         metadata = MetaData()
@@ -43,49 +39,50 @@ class Sql:
         self.engine = engine
         self.metadata = metadata
 
-    def query(self, query):
+    def query(self, query, select=False):
         """
-        read data from SQL Server into pandas DataFrame
+        execute arbitrary SQL queries, especially for functions where no
+        builtin exists. If executing a select, insert or create table
+        statement, it is recommended you use the provided method. If a select
+        statement is too complicated for the select_table function then it
+        will parsed here put into a pandas DataFrame (if possible), remeber
+        to pass the select parameter as True if this is the case. If you run
+        into trouble using this command consult the SQL Alchmey docs on using
+        the text() command: http://bit.ly/1iyDGY2
 
         Parameters
         ----------
         query : string 
             SQL statement you wish to execute
 
-        Returns
-        -------
-        res : pandas.DataFrame
-            results from executing `query`
-        """
-        cnxn = pyodbc.connect(Trusted_Connection='yes', dsn = self.dsn)
-        res = psql.read_frame(query,cnxn)
-        cnxn.close()
-        return res
-
-    def create_table(self, table_query):
-        """
-        create a table in SQL Server
-
-        Parameters
-
-        -----------
-        table_query : string
-            SQL query of form 'CREATE TABLE'
+        select : bool, default = False
+            True if a select statement, false otherwise
 
         Returns
         -------
-        None
+        df : pandas.DataFrame
+            If applicable
         """
-        cnxn = pyodbc.connect(Trusted_Connection='yes', dsn = self.dsn)
-        cur = cnxn.cursor()
-        cur.execute(table_query)
-        cnxn.commit()
-        cnxn.close()
+        conn = (self.engine).connect()
+        s = text(query)
+        result = conn.execute(s)
 
-    def import_table(self, table_name, output = 'dict', index_name = None):
+        if select:   
+            keys = result._metadata.keys
+            result_list = []
+
+            for row in result:
+                values = list(row)
+                data = dict(zip(keys, values))
+                result_list.append(data)
+
+            df = pd.DataFrame(result_list)
+            return df
+
+    def select_table(self, table_name, output = 'df', index_name = None):
         """
-        import a table from SQL Server into either a list of dictionaries or 
-        a list of dictionaries
+        import a table from a database into either a pandas dataframe or a 
+        list of dictionaries. Currently only supports 'Select *' like behavior.
 
         Parameters
         ----------
@@ -99,7 +96,13 @@ class Sql:
 
         Returns
         -------
-        None
+        df : pandas.DataFrame
+            the outcome of your select statement when the output parameter is
+            'df'
+
+        result_list : list of dictionaries
+            the outcome of your select statement when the output parameter is
+            'dict'
         """
         conn = (self.engine).connect()
         table = (self.metadata).tables[table_name]
@@ -127,7 +130,7 @@ class Sql:
 
     def insert(self, table_name, data):
         """
-        inserts data into a SQL table, can be used iteratively or as a batch
+        inserts data into a database, can be used iteratively or as a batch
 
         Parameters
         ----------
@@ -138,10 +141,6 @@ class Sql:
             the keys in these dictionaries must line up with the column
             names in your table and must all be the same. Can also be a 
             Pandas DataFrame that will be converted.
-
-        Returns
-        -------
-        None
         """
         if type(data) == 'pandas.core.frame.DataFrame':
             data = Sql.df2dict(self, data)
@@ -152,9 +151,10 @@ class Sql:
         conn.execute(ins, data)
         conn.close()
     
-    def write_table(self, data, table_name, if_exists = 'append', create = False, index = False, char_limit = 255):
+    def write_table(self, data, table_name, if_exists = 'append', 
+                    create = False, index = False, char_limit = 255):
         """
-        Allows the user to write data to SQL server directly with a completed
+        Allows the user to write data to a database directly with a completed
         data set. Will also create tables to fit the features of your data. if
         using iteratively it is advised you use Sql.insert.
 
@@ -191,7 +191,6 @@ class Sql:
                 raise ValueError("Table %s already exists.") % table_name
             elif if_exists == 'replace':
                 Sql.drop_table(self, table_name)
-                (self.metadata).remove((self.metadata).tables[table_name])
             elif if_exists == 'append':
                 data = Sql.df2dict(self, data)
                 Sql.insert(self, table_name, data)
@@ -221,19 +220,16 @@ class Sql:
 
     def drop_table(self, table_name):
         """
-        Permanently drops a table from SQL Server
+        Permanently drops a table from a database
         
         Parameters
         --------
         table_name : string
             the name of the table you wish to drop
-        
-        Returns
-        -------
-        None
         """
         table = (self.metadata).tables[table_name]
         table.drop(self.engine)
+        (self.metadata).remove((self.metadata).tables[table_name])
 
     def df2dict(self, df):
         """
@@ -247,10 +243,10 @@ class Sql:
 
         Returns
         -------
-        data : list of dictionaries
+        list of dictionaries
         """
-        data = df.to_dict('records')
-        return data
+        return [dict((k, v) for k,v in zip(self.columns, row)) for row in 
+                self.values] 
 
     def dict2df(self, data):
         """
@@ -260,27 +256,32 @@ class Sql:
         Parameters
         ----------
         data : list of dictionaries or dictionary
-            data that is to be converted to dataframe
+            data that is to be converted to dataframe. The keys of the
+            dictionary must be the equivalent column names used in your
+            database table. If using only number values an index error will
+            occur.
 
         Returns
         -------
-        df : pandas dataframe
+        pandas dataframe
         """
-        df = pd.DataFrame(data)
-        return df
+        return pd.DataFrame(data)
 
 def create_odbc_ini():
-    """Creates odbc.ini file which stores user specified dsn's"""
+    """
+    Creates an odbc.ini file which stores user specified dsn's
+    """
     here = os.getcwd()
     usr = os.getlogin()
     if os.name != 'posix':
-        return "Error: Must be on the linux server to make an odbc.ini file"
+        raise ValueError("Must be running Linux to make an odbc.ini file")
     elif os.path.exists(os.path.abspath('.odbc.ini')):
-        return "Error: odbc.ini already exists"
+        raise ValueError("odbc.ini already exists")
     else:
         try:
             os.chdir("/home/"+usr)
             with open('.odbc.ini', 'w') as f:
+                #TODO: Add support for other drivers
                 f.write("[Data Sources]\n\n[Default]\nDriver = /usr/local/lib/libtdsodbc.so\n")
             os.chdir(here)
         except Exception as err:
@@ -289,23 +290,19 @@ def create_odbc_ini():
 
 def add_dsn(dsn, server, db):
     """
-    add new dsn to odbc.ini
+    Adds new dsn to odbc.ini
 
     Parameters
     ----------
     dsn : string
         User specified name for connection
     server : string
-        Server where database is kept, e.g., devsql10
+        Server location where database is kept
     db : string 
-        name of database, e.g., pdb_ALS_Renewal
-    Returns
-    -------
-    None
-
+        Name of database
     """
     if os.name != 'posix':
-        return 'Error: Must be on linux server to add a connection with this function'
+        raise ValueError("Must be running Linux to add a connection with this function")
     else:
         here = os.getcwd()
         usr = os.getlogin()
@@ -321,9 +318,11 @@ def add_dsn(dsn, server, db):
             print str(err)
 
 def get_dsn_list():
-    """returns list of dsns"""
+    """
+    Returns a list of the dsns from the user's odbc.ini file
+    """
     if os.name != 'posix':
-        return 'Error: Must be on linux server to use this function'
+        raise ValueError('Must be running Linux to return connections with this function')
     here = os.getcwd()
     usr = os.getlogin()
     try:
@@ -343,9 +342,11 @@ def get_dsn_list():
         print str(err)
 
 def get_db_list():
-    """returns list of data bases"""
+    """
+    Returns a list of the databases with existing dsns
+    """
     if os.name != 'posix':
-        return 'must be on riley'
+        raise ValueError('Must be running Linux to return databases with this function')
     here = os.getcwd()
     usr = os.getlogin()
     try:
@@ -365,7 +366,7 @@ def get_db_list():
 
 def _sql_dtypes(value, char_limit = 255):
     """
-    convert python objects to sqlalchemy objects
+    Convert python objects to sqlalchemy objects
 
     Parameters
     ----------
@@ -390,172 +391,3 @@ def _sql_dtypes(value, char_limit = 255):
         return DateTime
     else:
         return Text
-
-class LegacySQL:
-
-    def __init__(self):
-        pass
-    
-    def q(self, query, dsn):
-        """
-        read data from SQL Server into pandas DataFrame
-
-        Parameters
-        ----------
-        query : string 
-            SQL statement you wish to execute
-        dsn : string, default = None
-            specifies which database to connect to, comes from user's odbc.ini file
-
-        Returns
-        -------
-        res : pandas.DataFrame
-            results from executing `query`
-        """
-        cnxn = pyodbc.connect(Trusted_Connection='yes', dsn = dsn)
-        res = psql.read_frame(query,cnxn)
-        cnxn.close()
-        return res
-
-    def table_write(self, df, table_name, dsn=None, if_exists='append'):
-        """
-        write to a table in SQL Server
-
-        Parameters
-        ----------
-        df : pandas.DataFrame
-            the pandas dataframe you want to write
-        table_name : string
-            the name of the table you to want to create
-        dsn : string, default = None
-            specifices with database to connect to, comes from user's odbc.ini file
-        if_exists : {'fail', 'replace', 'append'} default = 'append'
-            fail: If table exists, do nothing.
-            replace: If table exists, drop it, recreate it, and insert data.
-            append: If table exists, insert data. Create if does not exist.
-
-        Returns
-        -------
-        None
-
-        """    
-        cnxn = pyodbc.connect(Trusted_Connection='yes', dsn=dsn)
-        
-        if if_exists not in ('append','replace','fail'):
-            raise ValueError("'%s' is not a valid if_exists argument." % if_exists)
-                             
-        exists = LegacySQL.table_exists(self, table_name, cnxn)
-        if if_exists == 'fail' and exists:
-            raise ValueError("Table '%s' already exists." % table_name)
-                             
-        create = None
-        if exists:
-            if if_exists == 'fail':
-                raise ValueError("Table '%s' already exists." % table_name)
-            elif if_exists == 'replace':
-                cur = cnxn.cursor()
-                cur.execute("DROP TABLE %s;" % table_name)
-                cur.close()
-                create = LegacySQL.create_tableq(self, df, table_name)
-        else:
-            create = LegacySQL.create_tableq(self, df, table_name)
-            
-        if create is not None:
-            cur = cnxn.cursor()
-            cur.execute(create)
-            cur.close()
-        
-        cur = cnxn.cursor()
-        
-        names = [s.replace(' ', '_').strip() for s in df.columns]
-        LegacySQL._write_mssql(self, df, table_name, names, cur)
-        cur.close()
-        cnxn.commit()
-        cnxn.close()
-
-    def create_tableq(self, df, table_name):
-        """
-        cretes a SQL Server 'CREATE TABLE' query from a pandas DataFrame
-
-        Parameters
-        ----------
-        df : pandas.DataFrame
-            the pandas dataframe you want to write
-        table_name : string
-            the name of the table you to want to create
-
-        Returns
-        -------
-        create_statement : string
-            a SQL 'CREATE TABLE' query
-
-        """
-        safe_columns = [s.replace(' ', '_').strip() for s in df.dtypes.index]
-        data_types = [LegacySQL.mssql_datatypes(self, dtype.type) for dtype in df.dtypes]
-        column_types = zip(safe_columns, data_types)
-        columns = ',\n  '.join('%s %s' % x for x in column_types)
-        
-        template =  """CREATE TABLE %(table_name)s (
-                      %(columns)s
-                      );"""
-        
-        create_statement = template % {'table_name': table_name, 'columns': columns}
-        return create_statement
-
-
-    def mssql_datatypes(self, col_type):
-        """maps pandas datatype to mssql datatypes"""
-        sqltype = 'varchar(2550)'
-        
-        if issubclass(col_type, np.floating):
-            sqltype = 'real'
-            
-        if issubclass(col_type, np.integer):
-            sqltype = 'bigint'
-            
-        if issubclass(col_type, np.datetime64) or col_type is datetime:
-            sqltype = 'datetime'
-            
-        if col_type is datetime.date:
-            sqltype = 'date'
-            
-        if issubclass(col_type, np.bool_):
-            sqltype = 'bool'
-            
-        return sqltype
-
-    def table_exists(self, table_name, cnxn):
-        """
-        Returns a boolean for existance of a table
-
-        Parameters
-        ----------
-        table_name : string
-            name of table to check existence of
-        cnxn : pyodbc.connect
-            pyodbc connection instance to check
-
-        Returns
-        -------
-        bool for table existence
-
-        """
-        query = 'Select Top 1 * from %s' % table_name
-        
-        try:
-            res = psql.read_frame(query,cnxn)
-            return True
-        except:
-            #TODO read_frame error will print, need to fix
-            return False
-
-    def _write_mssql(self, df, table_name, names, cur):
-        """writes a pandas dataframe to SQL Server
-            NOT TO BE USED OUTSIDE OF table_write
-        """
-        bracketed_names = ['[' + column + ']' for column in names]
-        col_names = ','.join(bracketed_names)
-        wildcards = ','.join(['?'] * len(names))
-        insert_query = "INSERT INTO %s (%s) VALUES (%s)" % (table_name, col_names, wildcards)
-        data = [tuple(x) for x in df.values]
-        cur.executemany(insert_query, data)
