@@ -60,8 +60,9 @@ Note: These steps are only required for MSSQL. If you are using SQLite3 skip to 
             In [6]: conn = do.Sql(dsn = 'dsn_name')
             In [7]: data = conn.select_table(table_name='table_name', output='df', index_name='id_col')
             
-        This will return a pandas dataframe selecting all of the columns from table 'table_name' and adding 
-        the primary key as the index. The other way to select data is to user the query() method:
+        This will return a pandas dataframe selecting all of the columns from table 'table_name' and 
+        adding the primary key as the index. The other way to select data is to use the query() 
+        method:
         
             In [8]: query = """Select Column1,
                                       Column2,
@@ -72,20 +73,22 @@ Note: These steps are only required for MSSQL. If you are using SQLite3 skip to 
             In [9]: data = conn.query(query=query, select=True)
             
         The query method can also be used to execute any arbitrary SQL queries while staying back-end 
-        agnostic thanks to SQL Alchemy's text() method. If you have trouble using this command read about 
-        the text method in the tutorial: http://bit.ly/1iyDGY2
+        agnostic thanks to SQL Alchemy's text() method. If you have trouble using this command read 
+        about the text method in the tutorial: http://bit.ly/1iyDGY2
             
     3. Making changes to a database:
         
-        There are three supported methods of changing the contents of a database in data_odbc: creating a
-        table, dropping a table and inserting into a table. An example of each is found below. If you want
-        to execute a query that cannot be resolved with the built-in methods use the query() method.
+        There are three supported methods of changing the contents of a database in data_odbc: creating
+        a table, dropping a table and inserting into a table. An example of each is found below. If you
+        want to execute a query that cannot be resolved with the built-in methods use the query() 
+        method.
         
             In [10]: #create_table: conn.write_table(data_to_write, table_name,
                                                      if_exists='append', create=True)
             In [11]: #create_and_write_table: conn.write_table(data_to_write, table_name, 
                                                                if_exists='fail', create=False)
-            In [12]: #insert: conn.write_table(data_to_write, table_name, if _exists='append', create=False)
+            In [12]: #insert: conn.write_table(data_to_write, table_name, if _exists='append',
+                                               create=False)
             In [13]: #another_insert: conn.insert(table_name, data_to_write)
             In [14]: #drop_table: conn.drop_table(table_name)
         
