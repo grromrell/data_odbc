@@ -45,9 +45,9 @@ Note: These steps are only required for MSSQL. If you are using SQLite3 skip to 
             In [5]: do.get_db_list()
             Out[5]: ['database_name']
 
-        If you are on a Windows or OSX machine the process is slighty harder. In future this package *may* 
-        support non-Linux set-ups but for now you will have to create and check your DSNs manually. Both 
-        Windows and OSX have GUIs that should make the process easier.
+        If you are on a Windows or OSX machine the process is slighty harder. In future this package 
+        *may* support non-Linux set-ups but for now you will have to create and check your DSNs 
+        manually. Both Windows and OSX have GUIs that should make the process easier.
             
             See here for PC: http://blog.mclaughlinsoftware.com/2012/09/12/sql-server-odbc-osn/
             See here for OSX: http://www.actualtech.com/readme.php
@@ -81,10 +81,10 @@ Note: These steps are only required for MSSQL. If you are using SQLite3 skip to 
         table, dropping a table and inserting into a table. An example of each is found below. If you want
         to execute a query that cannot be resolved with the built-in methods use the query() method.
         
-            In [10]: #create_table: conn.write_table(data_to_write, table_name, if_exists='append', 
-                                                     create=True)
-            In [11]: #create_and_write_table: conn.write_table(data_to_write, table_name, if _exists='fail', 
-                                                               create=False)
+            In [10]: #create_table: conn.write_table(data_to_write, table_name,
+                                                     if_exists='append', create=True)
+            In [11]: #create_and_write_table: conn.write_table(data_to_write, table_name, 
+                                                               if_exists='fail', create=False)
             In [12]: #insert: conn.write_table(data_to_write, table_name, if _exists='append', create=False)
             In [13]: #another_insert: conn.insert(table_name, data_to_write)
             In [14]: #drop_table: conn.drop_table(table_name)
