@@ -9,7 +9,7 @@ from Python using the Pandas Data Analysis Toolkit.
 Tutorial
 --------
 
-Note: These steps are only required or MSSQL. If you are using SQLite3 skip to step <TODO>
+Note: These steps are only required or MSSQL. If you are using SQLite3 skip to step TODO
 
     1. Setting up your connections:
 
