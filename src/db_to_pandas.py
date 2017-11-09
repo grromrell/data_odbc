@@ -12,27 +12,35 @@ from sqlalchemy.types import Integer, Float, BigInteger, Boolean, String,
 
 class Sql:
 
-    def __init__(self, dsn, db='mssql', ad=False, trusted=False, domain=None,
-                 uid=None, pwd=None):
+    def __init__(self, db_sys='mssql', dsn=None, db=None, host=None, port=None,
+                 ad=False, trusted=False, domain=None, uid=None, pwd=None):
         """
         a class to support reading and writing data from databases, and pulling
         the resulting files into dictionaries or pandas dataframes
 
         Parameters
         ----------
-        dsn : string
-            specifies which database to connect to, comes from user's odbc.ini file
+        db_sys : ['mssql', 'sqlite', 'vertica', 'redshift']
+            Specifies the RDBMS you want to use, use mssql for Azure databases
+        
+        dsn : str
+            Data source name. If specified connection information will be
+            looked up in your odbc.ini
+        
+        db : str
+            If not using a dsn, the database to connect to
 
-        db : ['mssql', 'sqlite', 'vertica', 'azure'], default = 'mssql'
-            specifies the RDBMS you want to use. If you are unsure, then you don't
-            need to use this. When using sqlite, remember that the dsn is the
-            absolute location of your .db file (i.e.: /home/user/mydb.db).
-    
+        host : str
+            If not using a dsn, the hostname for the database connection
+
+        port: str
+            If not using a dsn, the port for the database connection
+
         ad : bool, default = True
             Whether to use Active Directory Authentication or not
 
         trusted : bool, default = False
-            indicates whether the database connection should be made with current
+            Indicates whether the database connection should be made with current
             credentials or be user supplied.
 
         domain : str
@@ -48,6 +56,9 @@ class Sql:
         -------
         See the functions below
         """
+        if not dsn or all((db, host, port)):
+            raise ValueError("Must supply either dsn or db, host and port")
+
         #Get credentials if needed
         if trusted:
             pass
@@ -61,18 +72,45 @@ class Sql:
                 pwd = getpass.getpass()
         
         #Get engine url based on database type
-        if db == 'mssql':
-            if trusted:
-                engine_url = 'mssql+pyodbc://%s' % dsn 
-            else:
-                engine_url = 'mssql+pyodbc://{0}:{1}@{2}'.format(uid, pwd, dsn)
-        elif db == 'sqlite':
-            engine_url = 'sqlite:///%s' % dsn
-        elif db == 'vertica':
-            engine_url = 'vertica+pyodbc://%s' % dsn
-        elif db == 'azure':
-            engine_url = 'mssql+pyodbc://{0}:{1}@{2}'.format(uid, pwd, dsn)
+        if dsn:
+            if db_sys == 'mssql':
+                if trusted:
+                    engine_url = 'mssql+pyodbc://{0}'.format(dsn) 
+                else:
+                    engine_url = 'mssql+pyodbc://{0}:{1}@{2}'.format(uid, pwd, dsn)
+            elif db_sys == 'sqlite':
+                engine_url = 'sqlite:///{0}'.format(dsn)
+            elif db_sys == 'vertica':
+                engine_url = 'vertica+pyodbc://{0}:{1}@{2}'.format(uid, pwd, dsn)
+            elif db_sys == 'redshift':
+                engine_url = 'redshift+pyscopg2://{0}:{1}@{2}'.format(uid, pwd, dsn)
         
+        else:
+            if db_sys == 'mssql':
+                if trusted:
+                    engine_url = 'mssql+pyodbc://{0}:{1}/{2}'.format(host, port, db)
+                else:
+                    engine_url = 'mssql+pyodbc://{0}:{1}@{2}:{3}/{4]'.format(uid, 
+                                                                             pwd, 
+                                                                             host,
+                                                                             port,
+                                                                             db)
+            elif db_sys == 'sqlite':
+                engine_url = 'sqlite:///{0}'.format(host)
+            elif db_sys == 'vertica':
+                engine_url = 'vertica+pyodbc://{0}:{1}@{2}:{3}/{4}'.format(uid, 
+                                                                           pwd,
+                                                                           host,
+                                                                           port,
+                                                                           db)
+            elif db_sys == 'redshift':
+                engine_url = 'redshift+pyscopg2://{0}:{1}@{2:{3}/{4}}'.format(uid, 
+                                                                              pwd, 
+                                                                              host,
+                                                                              port,
+                                                                              db)
+        
+
         creator = create_engine(engine_url).pool._creator
         engine = create_engine(engine_url, 
                                pool=QueuePool(creator, 
