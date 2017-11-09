@@ -6,5 +6,6 @@ setup(
     description = 'Database operation with Pandas',
     author = 'Ryan Brunt, Greg Romrell',
     author_email = 'grromrell@gmail.com',
-    py_modules=['db_to_pandas']
+    packages = ['db_to_pandas'],
+    package_dir = {'db_to_pandas', 'db_to_pandas'}
 )
