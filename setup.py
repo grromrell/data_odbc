@@ -7,5 +7,5 @@ setup(
     author = 'Ryan Brunt, Greg Romrell',
     author_email = 'grromrell@gmail.com',
     packages = ['db_to_pandas'],
-    package_dir = {'db_to_pandas', 'db_to_pandas'}
+    package_dir = {'db_to_pandas' : 'db_to_pandas'}
 )
