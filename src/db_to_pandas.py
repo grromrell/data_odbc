@@ -55,7 +55,7 @@ class Sql:
         -------
         See the functions below
         """
-        if not dsn or all((db, host, port)):
+        if not dsn and not all((db, host, port)):
             raise ValueError("Must supply either dsn or db, host and port")
 
         #Get credentials if needed
@@ -82,7 +82,7 @@ class Sql:
             elif db_sys == 'vertica':
                 engine_url = 'vertica+pyodbc://{0}:{1}@{2}'.format(uid, pwd, dsn)
             elif db_sys == 'redshift':
-                engine_url = 'redshift+pyscopg2://{0}:{1}@{2}'.format(uid, pwd, dsn)
+                engine_url = 'redshift+psycopg2://{0}:{1}@{2}'.format(uid, pwd, dsn)
         
         else:
             if db_sys == 'mssql':
@@ -103,7 +103,7 @@ class Sql:
                                                                            port,
                                                                            db)
             elif db_sys == 'redshift':
-                engine_url = 'redshift+pyscopg2://{0}:{1}@{2:{3}/{4}}'.format(uid, 
+                engine_url = 'redshift+psycopg2://{0}:{1}@{2}:{3}/{4}'.format(uid, 
                                                                               pwd, 
                                                                               host,
                                                                               port,
