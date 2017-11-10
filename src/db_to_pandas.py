@@ -7,8 +7,7 @@ from datetime import datetime, date
 from sqlalchemy.sql import select
 from sqlalchemy.pool import QueuePool
 from sqlalchemy import MetaData, Table, Column, create_engine
-from sqlalchemy.types import Integer, Float, BigInteger, Boolean, String, 
-                             Date, DateTime, Text
+from sqlalchemy.types import Integer, Float, BigInteger, Boolean, String, Date, DateTime, Text
 
 class Sql:
 
