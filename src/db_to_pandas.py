@@ -89,7 +89,7 @@ class Sql:
                 if trusted:
                     engine_url = 'mssql+pyodbc://{0}:{1}/{2}'.format(host, port, db)
                 else:
-                    engine_url = 'mssql+pyodbc://{0}:{1}@{2}:{3}/{4]'.format(uid, 
+                    engine_url = 'mssql+pyodbc://{0}:{1}@{2}:{3}/{4}'.format(uid, 
                                                                              pwd, 
                                                                              host,
                                                                              port,
