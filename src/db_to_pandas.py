@@ -35,7 +35,7 @@ class Sql:
         port: str
             If not using a dsn, the port for the database connection
 
-        ad : bool, default = True
+        ad : bool, default = False
             Whether to use Active Directory Authentication or not
 
         trusted : bool, default = False
@@ -81,6 +81,8 @@ class Sql:
                 engine_url = 'sqlite:///{0}'.format(dsn)
             elif db_sys == 'vertica':
                 engine_url = 'vertica+pyodbc://{0}:{1}@{2}'.format(uid, pwd, dsn)
+            elif db_sys == 'postgres':
+                engine_url = 'postgresql+psycopg2://{0}:{1}@{2}'.format(uid, pwd, dsn)
             elif db_sys == 'redshift':
                 engine_url = 'redshift+psycopg2://{0}:{1}@{2}'.format(uid, pwd, dsn)
         
@@ -102,6 +104,13 @@ class Sql:
                                                                            host,
                                                                            port,
                                                                            db)
+            elif db_sys == 'postgres':
+                engine_url = 'postgresql+psycopg2://{0}:{1}@{2}:{3}/{4}'.format(uid,
+                                                                                pwd,
+                                                                                host,
+                                                                                port,
+                                                                                db)
+        
             elif db_sys == 'redshift':
                 engine_url = 'redshift+psycopg2://{0}:{1}@{2}:{3}/{4}'.format(uid, 
                                                                               pwd, 
@@ -124,7 +133,7 @@ class Sql:
 
     def query(self, query):
         """
-        Execute arbitrary SQL select queries and read the results into a 
+        Execute arbitrary SQL queries and read the results into a 
         pandas dataframe. 
 
         Parameters
@@ -153,6 +162,32 @@ class Sql:
 
         df = pd.DataFrame(result_list)       
         return df
+    
+    def lazy_query(self, query):
+        """
+        Execute arbitrary SQL queries and lazily read the results
+
+        Parameters
+        ----------
+        query : string 
+            SQL statement you wish to execute
+
+        Returns
+        -------
+        df : pandas.DataFrame
+            results from executing `query`
+        """
+        result = self.engine.execute(query)
+        
+        #If not a select then return
+        if not result._metadata:
+            return
+
+        keys = result._metadata.keys
+        for row in result:
+            values = list(row)
+            data = dict(zip(keys, values))
+            yield data
 
     def import_table(self, table_name, output='dict', index_name=None):
         """
