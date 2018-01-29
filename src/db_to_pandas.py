@@ -98,6 +98,7 @@ class Sql:
                                                                              db)
             elif db_sys == 'sqlite':
                 engine_url = 'sqlite:///{0}'.format(host)
+            
             elif db_sys == 'vertica':
                 engine_url = 'vertica+pyodbc://{0}:{1}@{2}:{3}/{4}'.format(uid, 
                                                                            pwd,
@@ -386,11 +387,9 @@ def _sql_dtypes(value, char_limit=255):
         the number of characters you wish in varchar
     """
     if isinstance(value, int):
-        return Integer
+        return BigInteger
     if isinstance(value, float):
         return Float
-    if isinstance(value, long):        
-        return BigInteger
     if isinstance(value, bool):
         return Boolean
     if isinstance(value, str):
