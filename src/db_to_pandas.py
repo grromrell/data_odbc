@@ -4,8 +4,8 @@ import getpass
 import pandas as pd
 from datetime import datetime, date
 
-from sqlalchemy.sql import select
 from sqlalchemy.pool import QueuePool
+from sqlalchemy.sql import select, null
 from sqlalchemy import MetaData, Table, Column, create_engine
 from sqlalchemy.types import Integer, Float, BigInteger, Boolean, String, Date, DateTime, Text
 
@@ -232,7 +232,7 @@ class Sql:
 
     def insert(self, table_name, data):
         """
-        inserts data into a SQL table, can be used iteratively or as a batch
+        Inserts data into a SQL table, can be used iteratively or as a batch
 
         Parameters
         ----------
@@ -245,7 +245,7 @@ class Sql:
             Pandas DataFrame that will be converted.
         """
         if isinstance(data, pd.DataFrame):
-            data.fillna('', inplace=True)
+            data = data.astype(object).where((pd.notnull(data)), None)
             data = Sql.df2dict(self, data)
 
         table = (self.metadata).tables[table_name]
@@ -288,7 +288,7 @@ class Sql:
             raise ValueError("%s is not a valid if_exists value.") % table_name
 
         existence = (self.engine).dialect.has_table((self.engine).connect(), table_name)
-
+        
         if existence:
             if if_exists == 'fail':
                 raise ValueError("Table %s already exists.") % table_name
@@ -296,31 +296,27 @@ class Sql:
                 Sql.drop_table(self, table_name)
                 (self.metadata).remove((self.metadata).tables[table_name])
             elif if_exists == 'append':
-                data = Sql.df2dict(self, data)
                 Sql.insert(self, table_name, data)
+                return
 
-        existence = (self.engine).dialect.has_table((self.engine).connect(), table_name)
-        
-        if existence == False:
-            column_names = [col for col in data.columns]
-            column_types = []
+        column_names = [col for col in data.columns]
+        column_types = []
 
-            for col in column_names:
-                indexed = data.index[0]
-                value = data[col][indexed]
-                column_types.append(_sql_dtypes(value, char_limit))
+        for col in column_names:
+            indexed = data.index[0]
+            value = data[col][indexed]
+            column_types.append(_sql_dtypes(value, char_limit))
 
-            col_query = [Column(col, dtype) for col, dtype in zip(column_names, column_types)]
+        col_query = [Column(col, dtype) for col, dtype in zip(column_names, column_types)]
 
-            if index:
-                col_query.insert(0, Column('Index', _sql_dtypes(data.index[0]), index = True))
-                
-            table = Table(table_name, self.metadata, *col_query)
-            table.create(self.engine)
+        if index:
+            col_query.insert(0, Column('Index', _sql_dtypes(data.index[0]), index = True))
             
-            if not create:
-                data = Sql.df2dict(self,data)
-                Sql.insert(self, table_name, data)
+        table = Table(table_name, self.metadata, *col_query)
+        table.create(self.engine)
+        
+        if not create:
+            Sql.insert(self, table_name, data)
 
     def drop_table(self, table_name):
         """
@@ -394,8 +390,6 @@ def _sql_dtypes(value, char_limit=255):
         return Boolean
     if isinstance(value, str):
         return String(char_limit)
-    if isinstance(value, date):
-        return Date
     if isinstance(value, datetime):
         return DateTime
     else:
