@@ -123,7 +123,7 @@ class Sql:
         creator = create_engine(engine_url).pool._creator
         engine = create_engine(engine_url, 
                                pool=QueuePool(creator, 
-                                              reset_on_return='commit'))
+                               reset_on_return='commit'))
         metadata = MetaData()
         metadata.reflect(bind=engine)
 
@@ -148,9 +148,10 @@ class Sql:
             results from executing `query`
         """
         result = self.engine.execute(query)
-        
+
         #If not a select then return
         if not result._metadata:
+            result.close()
             return
 
         keys = result._metadata.keys
