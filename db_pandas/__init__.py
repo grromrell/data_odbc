@@ -63,12 +63,11 @@ class Sql:
             pass
         else:
             if not uid:
-                print("Username: ", end='')
-                uid = input()
+                uid = input("Username:\n")
                 if ad:
                     uid = domain + "\\" + uid
             if not pwd:
-                pwd = getpass.getpass()
+                pwd = getpass.getpass("Password:\n")
         
         #Get engine url based on database type
         if dsn:
