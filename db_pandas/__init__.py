@@ -131,7 +131,7 @@ class Sql:
         self.metadata = metadata
         #TODO: Turn metadata into SQL navigator?
 
-    def query(self, query):
+    def query(self, query, commit=False):
         """
         Execute arbitrary SQL queries and read the results into a 
         pandas dataframe. 
@@ -140,17 +140,23 @@ class Sql:
         ----------
         query : string 
             SQL statement you wish to execute
+        commit : bool
+            Whether to exit transaction before running query
 
         Returns
         -------
         df : pandas.DataFrame
             results from executing `query`
         """
-        result = self.engine.execute(query)
+        conn = self.engine.connect()
+        if commit:
+            conn.execute("commit")
+
+        result = conn.execute(query)
 
         #If not a select then return
         if not result._metadata:
-            result.close()
+            conn.close()
             return
 
         keys = result._metadata.keys
@@ -161,7 +167,8 @@ class Sql:
             data = dict(zip(keys, values))
             result_list.append(data)
 
-        df = pd.DataFrame(result_list)       
+        df = pd.DataFrame(result_list)
+        conn.close()
         return df
     
     def lazy_query(self, query):
