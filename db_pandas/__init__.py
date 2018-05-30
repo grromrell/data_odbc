@@ -63,11 +63,11 @@ class Sql:
             pass
         else:
             if not uid:
-                uid = input("Username:\n")
+                uid = input("DB Username:\n")
                 if ad:
                     uid = domain + "\\" + uid
             if not pwd:
-                pwd = getpass.getpass("Password:\n")
+                pwd = getpass.getpass("DB Password:\n")
         
         #Get engine url based on database type
         if dsn:
@@ -131,6 +131,10 @@ class Sql:
         self.metadata = metadata
         #TODO: Turn metadata into SQL navigator?
 
+    def refresh(self):
+        """Refresh database connection"""
+        self.metadata.reflect(bind=self.engine)
+
     def query(self, query, commit=False):
         """
         Execute arbitrary SQL queries and read the results into a 
@@ -157,6 +161,7 @@ class Sql:
         #If not a select then return
         if not result._metadata:
             conn.close()
+            self.refresh()
             return
 
         keys = result._metadata.keys
@@ -169,6 +174,7 @@ class Sql:
 
         df = pd.DataFrame(result_list)
         conn.close()
+        self.refresh()
         return df
     
     def lazy_query(self, query):
@@ -196,6 +202,8 @@ class Sql:
             values = list(row)
             data = dict(zip(keys, values))
             yield data
+        result.close()
+        self.refresh()
 
     def import_table(self, table_name, output='dict', index_name=None):
         """
@@ -324,6 +332,7 @@ class Sql:
         
         if not create:
             Sql.insert(self, table_name, data)
+        self.refresh()
 
     def drop_table(self, table_name):
         """
@@ -340,6 +349,7 @@ class Sql:
         """
         table = (self.metadata).tables[table_name]
         table.drop(self.engine)
+        self.refresh()
 
     def df2dict(self, df):
         """
