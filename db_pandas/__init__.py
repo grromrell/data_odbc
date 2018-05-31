@@ -11,7 +11,7 @@ from sqlalchemy.types import Integer, Float, BigInteger, Boolean, String, Date, 
 
 class Sql:
 
-    def __init__(self, db_sys='mssql', dsn=None, db=None, host=None, port=None,
+    def __init__(self, db_sys='postgres', dsn=None, db=None, host=None, port=None,
                  ad=False, trusted=False, domain=None, uid=None, pwd=None):
         """
         a class to support reading and writing data from databases, and pulling
@@ -19,7 +19,7 @@ class Sql:
 
         Parameters
         ----------
-        db_sys : ['mssql', 'sqlite', 'vertica', 'redshift']
+        db_sys : ['mssql', 'sqlite', 'vertica', 'redshift', 'postgres']
             Specifies the RDBMS you want to use, use mssql for Azure databases
         
         dsn : str
@@ -55,70 +55,99 @@ class Sql:
         -------
         See the functions below
         """
-        if not dsn and not all((db, host, port)):
-            raise ValueError("Must supply either dsn or db, host and port")
+        # get credentials if needed
+        self.uid = uid
+        self._pwd = pwd
+        self.trusted = trusted
+        if not self.trusted:
+            self._get_creds(ad)
+    
+        # for automatic connections
+        self.dsn = dsn
 
-        #Get credentials if needed
-        if trusted:
-            pass
-        else:
-            if not uid:
-                uid = input("DB Username:\n")
-                if ad:
-                    uid = domain + "\\" + uid
-            if not pwd:
-                pwd = getpass.getpass("DB Password:\n")
-        
-        #Get engine url based on database type
-        if dsn:
-            if db_sys == 'mssql':
-                if trusted:
-                    engine_url = 'mssql+pyodbc://{0}'.format(dsn) 
-                else:
-                    engine_url = 'mssql+pyodbc://{0}:{1}@{2}'.format(uid, pwd, dsn)
-            elif db_sys == 'sqlite':
-                engine_url = 'sqlite:///{0}'.format(dsn)
-            elif db_sys == 'vertica':
-                engine_url = 'vertica+pyodbc://{0}:{1}@{2}'.format(uid, pwd, dsn)
-            elif db_sys == 'postgres':
-                engine_url = 'postgresql+psycopg2://{0}:{1}@{2}'.format(uid, pwd, dsn)
-            elif db_sys == 'redshift':
-                engine_url = 'redshift+psycopg2://{0}:{1}@{2}'.format(uid, pwd, dsn)
-        
-        else:
-            if db_sys == 'mssql':
-                if trusted:
-                    engine_url = 'mssql+pyodbc://{0}:{1}/{2}'.format(host, port, db)
-                else:
-                    engine_url = 'mssql+pyodbc://{0}:{1}@{2}:{3}/{4}'.format(uid, 
-                                                                             pwd, 
-                                                                             host,
-                                                                             port,
-                                                                             db)
-            elif db_sys == 'sqlite':
-                engine_url = 'sqlite:///{0}'.format(host)
-            
-            elif db_sys == 'vertica':
-                engine_url = 'vertica+pyodbc://{0}:{1}@{2}:{3}/{4}'.format(uid, 
-                                                                           pwd,
-                                                                           host,
-                                                                           port,
-                                                                           db)
-            elif db_sys == 'postgres':
-                engine_url = 'postgresql+psycopg2://{0}:{1}@{2}:{3}/{4}'.format(uid,
-                                                                                pwd,
-                                                                                host,
-                                                                                port,
-                                                                                db)
-        
-            elif db_sys == 'redshift':
-                engine_url = 'redshift+psycopg2://{0}:{1}@{2}:{3}/{4}'.format(uid, 
-                                                                              pwd, 
-                                                                              host,
-                                                                              port,
-                                                                              db)
-        
+        # for explicit connections
+        self.db = db
+        self.host = host
+        self.port = port
 
+        # find correct engine specification
+        self.db_sys = db_sys
+        if self.dsn:
+            engine_url = self._dsn_url()
+        elif all((db, host, port)):
+            engine_url = self._var_url()
+        else:
+            raise ValueError("Must supply either dsn or db, host and port") 
+
+        # connect using engine
+        self._connect(engine_url)
+
+    def _get_creds(self, ad):
+        if not self.uid:
+            self.uid = input("DB Username:\n")
+            if ad:
+                self.uid = domain + "\\" + uid
+        if not self._pwd:
+            self._pwd = getpass.getpass("DB Password:\n")
+
+    def _dsn_url(self):
+        """Construct engine url for dsn based connections"""
+        if self.db_sys == 'mssql':
+            if self.trusted:
+                engine_url = 'mssql+pyodbc://{0}'.format(self.dsn) 
+            else:
+                engine_url = 'mssql+pyodbc://{0}:{1}@{2}'.format(self.uid, self._pwd, self.dsn)
+        elif self.db_sys == 'sqlite':
+            engine_url = 'sqlite:///{0}'.format(self.dsn)
+        elif self.db_sys == 'vertica':
+            engine_url = 'vertica+pyodbc://{0}:{1}@{2}'.format(self.uid, self._pwd, self.dsn)
+        elif self.db_sys == 'postgres':
+            engine_url = 'postgresql+psycopg2://{0}:{1}@{2}'.format(self.uid, self._pwd, self.dsn)
+        elif self.db_sys == 'redshift':
+            engine_url = 'redshift+psycopg2://{0}:{1}@{2}'.format(self.uid, self._pwd, self.dsn)
+
+        return engine_url
+
+    def _var_url(self):
+        """Construct engine url for expilictly based connections"""
+        if self.db_sys == 'mssql':
+            if self.trusted:
+                engine_url = 'mssql+pyodbc://{0}:{1}/{2}'.format(self.host, 
+                                                                 self.port, 
+                                                                 self.db)
+            else:
+                engine_url = 'mssql+pyodbc://{0}:{1}@{2}:{3}/{4}'.format(self.uid, 
+                                                                         self._pwd, 
+                                                                         self.host,
+                                                                         self.port,
+                                                                         self.db)
+        elif self.db_sys == 'sqlite':
+            engine_url = 'sqlite:///{0}'.format(self.host)
+        
+        elif self.db_sys == 'vertica':
+            engine_url = 'vertica+pyodbc://{0}:{1}@{2}:{3}/{4}'.format(self.uid, 
+                                                                       self._pwd,
+                                                                       self.host,
+                                                                       self.port,
+                                                                       self.db)
+        elif self.db_sys == 'postgres':
+            engine_url = 'postgresql+psycopg2://{0}:{1}@{2}:{3}/{4}'.format(self.uid,
+                                                                            self._pwd,
+                                                                            self.host,
+                                                                            self.port,
+                                                                            self.db)
+    
+        elif self.db_sys == 'redshift':
+            engine_url = 'redshift+psycopg2://{0}:{1}@{2}:{3}/{4}'.format(self.uid, 
+                                                                          self._pwd, 
+                                                                          self.host,
+                                                                          self.port,
+                                                                          self.db)
+
+        return engine_url
+
+    def _connect(self, engine_url):
+        """Connect to database based on engine url"""
         creator = create_engine(engine_url).pool._creator
         engine = create_engine(engine_url, 
                                pool=QueuePool(creator, 
@@ -126,14 +155,25 @@ class Sql:
         metadata = MetaData()
         metadata.reflect(bind=engine)
 
-        self.dsn = dsn
         self.engine = engine
         self.metadata = metadata
-        #TODO: Turn metadata into SQL navigator?
 
-    def refresh(self):
+    def _refresh(self):
         """Refresh database connection"""
         self.metadata.reflect(bind=self.engine)
+
+    def change_db(self, db):
+        """
+        Change database without reconnecting, uses originally passed 
+        credentials.
+
+        Parameters
+        ----------
+        db : string
+            Database to connect to
+        """
+        self.db = db
+        self._connect(self._var_url())
 
     def query(self, query, commit=False):
         """
@@ -161,7 +201,7 @@ class Sql:
         #If not a select then return
         if not result._metadata:
             conn.close()
-            self.refresh()
+            self._refresh()
             return
 
         keys = result._metadata.keys
@@ -171,10 +211,10 @@ class Sql:
             values = list(row)
             data = dict(zip(keys, values))
             result_list.append(data)
-
         df = pd.DataFrame(result_list)
+        
         conn.close()
-        self.refresh()
+        self._refresh()
         return df
     
     def lazy_query(self, query):
@@ -202,8 +242,9 @@ class Sql:
             values = list(row)
             data = dict(zip(keys, values))
             yield data
+        
         result.close()
-        self.refresh()
+        self._refresh()
 
     def import_table(self, table_name, output='dict', index_name=None):
         """
@@ -268,6 +309,8 @@ class Sql:
 
         with self.engine.begin() as conn:
             conn.execute(ins, data)
+
+        self._refresh()
     
     def write_table(self, data, table_name, if_exists='append', 
                     create=False, index=False, char_limit=255):
@@ -332,7 +375,8 @@ class Sql:
         
         if not create:
             Sql.insert(self, table_name, data)
-        self.refresh()
+        
+        self._refresh()
 
     def drop_table(self, table_name):
         """
@@ -349,7 +393,7 @@ class Sql:
         """
         table = (self.metadata).tables[table_name]
         table.drop(self.engine)
-        self.refresh()
+        self._refresh()
 
     def df2dict(self, df):
         """
