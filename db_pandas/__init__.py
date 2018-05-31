@@ -12,7 +12,8 @@ from sqlalchemy.types import Integer, Float, BigInteger, Boolean, String, Date, 
 class Sql:
 
     def __init__(self, db_sys='postgres', dsn=None, db=None, host=None, port=None,
-                 ad=False, trusted=False, domain=None, uid=None, pwd=None, schema=None):
+                 ad=False, trusted=False, domain=None, uid=None, pwd=None, schema=None,
+                 skip_reflect=False):
         """
         a class to support reading and writing data from databases, and pulling
         the resulting files into dictionaries or pandas dataframes
@@ -54,6 +55,10 @@ class Sql:
         schema : str
             Schema to use for connection. Only needed for postgres and its dialects.
 
+        skip_reflect : bool
+            Whether metadata should be reflected, skip if there are complex indices in your db.
+            Some functions will not work with this turned on.
+
         Methods
         -------
         See the functions below
@@ -76,6 +81,7 @@ class Sql:
 
         # find correct engine specification
         self.db_sys = db_sys
+        self.skip_reflect = skip_reflect
         if self.dsn:
             engine_url = self._dsn_url()
         elif all((db, host, port)):
@@ -84,7 +90,7 @@ class Sql:
             raise ValueError("Must supply either dsn or db, host and port") 
 
         # connect using engine
-        self._connect(engine_url)
+        self._connect(engine_url, skip_reflect)
 
     def _get_creds(self, ad):
         if not self.uid:
@@ -150,23 +156,27 @@ class Sql:
 
         return engine_url
 
-    def _connect(self, engine_url):
+    def _connect(self, engine_url, skip_reflect=False):
         """Connect to database based on engine url"""
         creator = create_engine(engine_url).pool._creator
         engine = create_engine(engine_url, 
                                pool=QueuePool(creator, 
                                reset_on_return='commit'))
-        metadata = MetaData(schema=self.schema)
-        metadata.reflect(bind=engine)
+
+        self.skip_reflect = skip_reflect
+        if not skip_reflect:
+            metadata = MetaData(schema=self.schema)
+            metadata.reflect(bind=engine)
+            self.metadata = metadata
 
         self.engine = engine
-        self.metadata = metadata
 
     def _refresh(self):
         """Refresh database connection"""
-        self.metadata.reflect(bind=self.engine)
+        if not self.skip_reflect:
+            self.metadata.reflect(bind=self.engine)
 
-    def change_db(self, db):
+    def change_db(self, db, skip_reflect=False):
         """
         Change database without reconnecting, uses originally passed 
         credentials.
@@ -177,9 +187,9 @@ class Sql:
             Database to connect to
         """
         self.db = db
-        self._connect(self._var_url())
+        self._connect(self._var_url(), skip_reflect)
 
-    def change_schema(self, schema):
+    def change_schema(self, schema, skip_reflect=False):
         """
         Change schema without reconnecting, using originally passed 
         credentials. Used mostly for postgres
@@ -190,7 +200,7 @@ class Sql:
             Schema to switch context to
         """
         self.schema = schema
-        self._connect(self._var_url())
+        self._connect(self._var_url(), skip_reflect)
 
     def query(self, query, commit=False):
         """
