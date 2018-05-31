@@ -12,7 +12,7 @@ from sqlalchemy.types import Integer, Float, BigInteger, Boolean, String, Date, 
 class Sql:
 
     def __init__(self, db_sys='postgres', dsn=None, db=None, host=None, port=None,
-                 ad=False, trusted=False, domain=None, uid=None, pwd=None):
+                 ad=False, trusted=False, domain=None, uid=None, pwd=None, schema=None):
         """
         a class to support reading and writing data from databases, and pulling
         the resulting files into dictionaries or pandas dataframes
@@ -51,13 +51,16 @@ class Sql:
         pwd : str
             Explicitly pass password
 
+        schema : str
+            Schema to use for connection. Only needed for postgres and its dialects.
+
         Methods
         -------
         See the functions below
         """
         # get credentials if needed
         self.uid = uid
-        self._pwd = pwd
+        self.__pwd = pwd
         self.trusted = trusted
         if not self.trusted:
             self._get_creds(ad)
@@ -69,6 +72,7 @@ class Sql:
         self.db = db
         self.host = host
         self.port = port
+        self.schema = schema
 
         # find correct engine specification
         self.db_sys = db_sys
@@ -87,8 +91,8 @@ class Sql:
             self.uid = input("DB Username:\n")
             if ad:
                 self.uid = domain + "\\" + uid
-        if not self._pwd:
-            self._pwd = getpass.getpass("DB Password:\n")
+        if not self.__pwd:
+            self.__pwd = getpass.getpass("DB Password:\n")
 
     def _dsn_url(self):
         """Construct engine url for dsn based connections"""
@@ -96,15 +100,15 @@ class Sql:
             if self.trusted:
                 engine_url = 'mssql+pyodbc://{0}'.format(self.dsn) 
             else:
-                engine_url = 'mssql+pyodbc://{0}:{1}@{2}'.format(self.uid, self._pwd, self.dsn)
+                engine_url = 'mssql+pyodbc://{0}:{1}@{2}'.format(self.uid, self.__pwd, self.dsn)
         elif self.db_sys == 'sqlite':
             engine_url = 'sqlite:///{0}'.format(self.dsn)
         elif self.db_sys == 'vertica':
-            engine_url = 'vertica+pyodbc://{0}:{1}@{2}'.format(self.uid, self._pwd, self.dsn)
+            engine_url = 'vertica+pyodbc://{0}:{1}@{2}'.format(self.uid, self.__pwd, self.dsn)
         elif self.db_sys == 'postgres':
-            engine_url = 'postgresql+psycopg2://{0}:{1}@{2}'.format(self.uid, self._pwd, self.dsn)
+            engine_url = 'postgresql+psycopg2://{0}:{1}@{2}'.format(self.uid, self.__pwd, self.dsn)
         elif self.db_sys == 'redshift':
-            engine_url = 'redshift+psycopg2://{0}:{1}@{2}'.format(self.uid, self._pwd, self.dsn)
+            engine_url = 'redshift+psycopg2://{0}:{1}@{2}'.format(self.uid, self.__pwd, self.dsn)
 
         return engine_url
 
@@ -117,7 +121,7 @@ class Sql:
                                                                  self.db)
             else:
                 engine_url = 'mssql+pyodbc://{0}:{1}@{2}:{3}/{4}'.format(self.uid, 
-                                                                         self._pwd, 
+                                                                         self.__pwd, 
                                                                          self.host,
                                                                          self.port,
                                                                          self.db)
@@ -126,20 +130,20 @@ class Sql:
         
         elif self.db_sys == 'vertica':
             engine_url = 'vertica+pyodbc://{0}:{1}@{2}:{3}/{4}'.format(self.uid, 
-                                                                       self._pwd,
+                                                                       self.__pwd,
                                                                        self.host,
                                                                        self.port,
                                                                        self.db)
         elif self.db_sys == 'postgres':
             engine_url = 'postgresql+psycopg2://{0}:{1}@{2}:{3}/{4}'.format(self.uid,
-                                                                            self._pwd,
+                                                                            self.__pwd,
                                                                             self.host,
                                                                             self.port,
                                                                             self.db)
     
         elif self.db_sys == 'redshift':
             engine_url = 'redshift+psycopg2://{0}:{1}@{2}:{3}/{4}'.format(self.uid, 
-                                                                          self._pwd, 
+                                                                          self.__pwd, 
                                                                           self.host,
                                                                           self.port,
                                                                           self.db)
@@ -152,7 +156,7 @@ class Sql:
         engine = create_engine(engine_url, 
                                pool=QueuePool(creator, 
                                reset_on_return='commit'))
-        metadata = MetaData()
+        metadata = MetaData(schema=self.schema)
         metadata.reflect(bind=engine)
 
         self.engine = engine
@@ -173,6 +177,19 @@ class Sql:
             Database to connect to
         """
         self.db = db
+        self._connect(self._var_url())
+
+    def change_schema(self, schema):
+        """
+        Change schema without reconnecting, using originally passed 
+        credentials. Used mostly for postgres
+
+        Parameters
+        ----------
+        schema : str
+            Schema to switch context to
+        """
+        self.schema = schema
         self._connect(self._var_url())
 
     def query(self, query, commit=False):
@@ -262,6 +279,10 @@ class Sql:
             name of the column where your index resides
         """
         conn = (self.engine).connect()
+
+        if self.schema:
+            table_name = self.schema + '.' + table_name
+
         table = (self.metadata).tables[table_name]
         s = select([table])
         result = conn.execute(s)
@@ -304,6 +325,9 @@ class Sql:
             data = data.astype(object).where((pd.notnull(data)), None)
             data = Sql.df2dict(self, data)
 
+        if self.schema:
+            table_name = self.schema + '.' + table_name
+
         table = (self.metadata).tables[table_name]
         ins = table.insert()
 
@@ -341,6 +365,9 @@ class Sql:
         """
         if isinstance(data, list) or isinstance(data, dict):
             data = Sql.dict2df(self, data)
+        
+        if self.schema:
+            table_name = self.schema + '.' + table_name
 
         if if_exists not in ['append', 'fail', 'replace']:
             raise ValueError("%s is not a valid if_exists value.") % table_name
@@ -391,6 +418,8 @@ class Sql:
         -------
         None
         """
+        if self.schema:
+            table_name = self.schema + '.' + table_name
         table = (self.metadata).tables[table_name]
         table.drop(self.engine)
         self._refresh()
