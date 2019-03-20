@@ -13,7 +13,7 @@ class Sql:
 
     def __init__(self, db_sys='postgres', dsn=None, db=None, host=None, port=None,
                  ad=False, trusted=False, domain=None, uid=None, pwd=None, schema=None,
-                 skip_reflect=False):
+                 driver=None, skip_reflect=False):
         """
         a class to support reading and writing data from databases, and pulling
         the resulting files into dictionaries or pandas dataframes
@@ -55,6 +55,9 @@ class Sql:
         schema : str
             Schema to use for connection. Only needed for postgres and its dialects.
 
+        driver : str
+            Occasionally a driver must be explicitly passed, mostly for MSSQL
+
         skip_reflect : bool
             Whether metadata should be reflected, skip if there are complex indices in your db.
             Some functions will not work with this turned on.
@@ -78,6 +81,7 @@ class Sql:
         self.host = host
         self.port = port
         self.schema = schema
+        self.driver = driver
 
         # find correct engine specification
         self.db_sys = db_sys
@@ -126,11 +130,19 @@ class Sql:
                                                                  self.port, 
                                                                  self.db)
             else:
-                engine_url = 'mssql+pyodbc://{0}:{1}@{2}:{3}/{4}'.format(self.uid, 
-                                                                         self.__pwd, 
-                                                                         self.host,
-                                                                         self.port,
-                                                                         self.db)
+                base_url = 'mssql+pyodbc://{0}:{1}@{2}:{3}/{4}'
+
+                # add in driver if needed to pass explicitly
+                if self.driver:
+                    self.driver = self.driver.replace(' ','+')
+                    base_url += '?driver={0}'.format(self.driver)
+
+                
+                engine_url = base_url.format(self.uid, 
+                                             self.__pwd, 
+                                             self.host,
+                                             self.port,
+                                             self.db)
         elif self.db_sys == 'sqlite':
             engine_url = 'sqlite:///{0}'.format(self.host)
         
